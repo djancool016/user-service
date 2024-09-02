@@ -1,0 +1,29 @@
+{
+  "name": "user-service",
+  "version": "1.0.0",
+  "description": "My personal framework for restfull api using Express.js and dwij-simple-orm",
+  "main": "index.js",
+  "scripts": {
+    "dev": "cross-env NODE_ENV=development nodemon app.js",
+    "test": "cross-env NODE_ENV=test jest --detectOpenHandles --runInBand"
+  },
+  "keywords": [],
+  "author": "Dwi Julianto",
+  "license": "ISC",
+  "dependencies": {
+    "dwij-simple-orm": "^1.1.0",
+    "axios": "^1.7.2",
+    "bcrypt": "^5.1.1",
+    "cookie-parser": "^1.4.6",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.2"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.6",
+    "cross-env": "^7.0.3",
+    "jest": "^29.7.0",
+    "nodemon": "^3.0.1",
+    "supertest": "^6.3.4"
+  }
+}
