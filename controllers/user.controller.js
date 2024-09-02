@@ -184,23 +184,10 @@ async function register(req, res, next, cookie = setCookies, secret = tokenSecre
 
         // Hash password
         const hashedPassword = await PasswordManager.encrypt({password})
-        // Create new user
-        const newUser = await model.create({ password: hashedPassword , ...userData})
 
-        const user = await model.findByPk(userData.id)
+        const result = await model.create({ password: hashedPassword , ...userData})
 
-        if(!user.data[0]) throw errorCode.ER_NOT_FOUND
-
-        const{id, username, ...rest} = user.data[0]
-
-        // Generate tokens
-        const payload = { id, username }
-        const tokens = await TokenManager.authenticatedUser(payload, secret.refreshToken)
-
-        // Set cookies
-        cookie(res, tokens)
-
-        req.result = statusLogger({httpCode: 201})
+        req.result = dataLogger({data: result})
 
         // Run next middleware
         return next()

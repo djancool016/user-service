@@ -7,6 +7,19 @@ const testCases = {
     create: [
         {
             input: {
+                roleId: 1,
+                userName: 'aasfwqfqfq',
+                password: 'qwfqsafa',
+                email: 'asafwqwf@gmail.com',
+                name: 'asasfqw',
+                phone: '+62123123123',
+                address: 'Indonesia',
+                nik: '1122334455'
+            },
+            description: 'Success should returning truthly'
+        },
+        {
+            input: {
                 id: 7654,
                 roleId: 1,
                 userName: 'TestUser1',
