@@ -1,3 +1,4 @@
+require('dotenv').config()
 const { parse } = require('pg-connection-string')
 const env = process.env.NODE_ENV || 'development'
 
