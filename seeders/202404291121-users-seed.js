@@ -2,7 +2,6 @@ module.exports = {
     table: 'users',
     seed: [
         {
-            id: 1,
             roleId: 1,
             username: 'admin',
             password: '$2b$10$h6Uo0u07tzgVf14jTsIPHOskqDUdDwLsZeMFCxX5rm8BsEJTePZd.',

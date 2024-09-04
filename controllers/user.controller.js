@@ -1,6 +1,6 @@
 const config = require('../config')
 const {
-    controller: baseController, 
+    controller, 
     customError: {errorCode, endpointErrorHandler},
     httpLogger: {dataLogger, statusLogger}
 } = require('dwij-simple-orm').init(config)
@@ -9,228 +9,59 @@ const UserModel = require('../models/user.model')
 const TokenManager = require("../utils/tokenManager")
 const PasswordManager = require('../utils/passwordManager')
 
+const baseController = (method) => (req, res, next) => {
+    return controller[method](req, res, next, model = new UserModel())
+}
 const tokenSecret = {
     accessToken: process.env.ACCESS_TOKEN_SECRET,
     refreshToken: process.env.REFRESH_TOKEN_SECRET
 }
 
-/**
- * Fonction for rotate or renew JWT Token
- */
-async function rotateToken(req, res, next, cookies = setCookies, secret = tokenSecret){
+// find user by username then send user data to next middleware
+async function findByUsername(req, res, next){
     try {
-        // go to next middleware if error occured
-        if(req.result?.status === false) return next()
-
-        // get refreshToken from header
-        const {refreshToken} = isTokenExist(req)
-
-        // validate token and get payload
-        const payload = await validateToken(refreshToken, secret.refreshToken)
-
-        // rotate tokens
-        const tokens = await handleTokenRotation(payload, secret.refreshToken)
-        
-        // send token as Http-only cookies
-        cookies(res, tokens)
-        
-        return next()
-
-    } catch (error) {
-        if(error.message == 'jwt malformed'){
-            error['code'] = 'ER_JWT_MALFORMED'
-        }
-        req.result = endpointErrorHandler(error)
-        return next()
-    }
-}
-/**
- * function for authorize user using JWT Token
- */
-async function authorizeUser(req, res, next, cookies = setCookies, secret = tokenSecret){
-    try {
-        // check if token exist
-        const{refreshToken, accessToken} = isTokenExist(req)
-
-        // get payload data
-        let payload = await validateToken(accessToken, secret.accessToken)
-        let user
-
-        // validate payload data
-        if(payload) {
-            user = await getUserData(payload)
-        }else{
-            await rotateToken(req, res, next, cookies, secret)
-            user = await getUserData(payload)
-        }
-
-        if(!user.data) throw errorCode.ER_JWT_PAYLOAD_INVALID
-        
-        // add user data into request payload
-        const {password, ...rest} = user.data[0]
-        req.result = dataLogger({data: rest})
-
-        // run next middleware
-        return next()
-
-        // returning validated payload data
-
-    } catch (error) {
-        req.result = endpointErrorHandler(error)
-        return next()
-    }
-}
-/**
- * Function for handling user login using 
- * authorizeUser (JWT Token) or authenticateUser (user credential)
- */
-async function login(req, res, next, cookies = setCookies, secret = tokenSecret) {
-    try {
-        // check if token exist
-        const refreshToken = req?.cookies?.refreshToken
-        const accessToken = req?.cookies?.accessToken
-
-        if (accessToken && refreshToken) {
-            // use authorizeUser if tokens exist
-            return await authorizeUser(req, res, next, cookies, secret)
-        } else if (req.body?.username || req.body?.password) {
-            // use authenticateUser if tokens do not exist
-            return await authenticateUser(req, res, next, cookies, secret)
-        } else {
-            // throw forbidden if no token and no credentials
-            throw errorCode.ER_ACCESS_DENIED_ERROR
-        }
-    } catch (error) {
-        req.result = endpointErrorHandler(error)
-        return next()
-    }
-}
-/**
- * Function to authenticate user using username and password
- */
-async function authenticateUser(req, res, next, cookies = setCookies, secret = tokenSecret) {
-    try {
-        if(!req.body) throw errorCode.ER_INVALID_BODY
+        // check username and password
         const { username, password } = req.body
+        if (!username || !password) throw errorCode.ER_INVALID_CREDENTIALS
 
-        // Validate username and password
-        if (!username || !password) {
-            throw errorCode.ER_INVALID_CREDENTIALS
-        }
+        // find user by username
         const model = new UserModel()
-        // Fetch user data from database
         const user = await model.findByKeys({username}, false)
         if (!user.data[0]) throw errorCode.ER_NOT_FOUND
 
-        const {password: hash, ...data} = user.data[0]
+        // send user data to next middleware
+        req.user = user.data[0]
+        return next()
 
+    } catch (error) {
+        req.result = endpointErrorHandler(error)
+        return controller.sendResponse(req, res)
+    }
+}
+
+// get hashed password from user data, compare pasword, then send payload to next middleware
+async function authenticateUser(req, res, next){
+    try {
+        // check hashed password
+        const {password} = req.body
+        const {password: hash, ...data} = req.user
         if(!hash) throw errorCode.ER_EMPTY_HASHED_PASSWORD
 
         // Verify password
         const isPasswordValid = await PasswordManager.compare({password, hashedPassword: hash})
         if (!isPasswordValid) throw errorCode.ER_INVALID_PASSWORD
 
-        // Generate tokens
-        const payload = { id: data.id, username: data.username }
-        const tokens = await TokenManager.authenticatedUser(payload, secret.refreshToken)
-
-        // Set cookies
-        cookies(res, tokens);
-
-        req.result = dataLogger({ data })
-
-        // Run next middleware
+        // send payload to next middleware
+        req.payload = { id: data.id, roleid: data.roleid, username: data.username }
         return next()
-    } catch (error) {
-        req.result = endpointErrorHandler(error)
-        return next()
-    }
-}
-/**
- * Function for deauthenticate user by revoke token from client side cookies
- */
-async function logout(req, res, next) {
-    try {
-        // Clear cookies
-        res.clearCookie('accessToken', {
-            httpOnly: true,
-            secure: true,
-            sameSite: 'strict'
-        });
-        res.clearCookie('refreshToken', {
-            httpOnly: true,
-            secure: true,
-            sameSite: 'strict'
-        });
-
-        req.result = statusLogger({httpCode: 200, message: 'Logout successful'})
-
-        // Run next middleware
-        return next()
-    } catch (error) {
-        req.result = endpointErrorHandler(error)
-        return next()
-    }
-}
-/**
- * Function for create new user
- */
-async function register(req, res, next, cookie = setCookies, secret = tokenSecret) {
-    try {
-        if (!req.body || !req.body.password) throw errorCode.ER_INVALID_BODY
-        const { password, ...userData } = req.body
-
-        const model = new UserModel()
-
-        // Hash password
-        const hashedPassword = await PasswordManager.encrypt({password})
-
-        const result = await model.create({ password: hashedPassword , ...userData})
-
-        req.result = dataLogger({data: result})
-
-        // Run next middleware
-        return next()
-    } catch (error) {
-        req.result = endpointErrorHandler(error)
-        return next()
-    }
-}
-/**
- * Function for retrieve user information
- */
-async function profile(req, res, next, cookie = setCookies, secret = tokenSecret) {
-    try {
-        const { refreshToken } = isTokenExist(req)
         
-        const payload = await validateToken(refreshToken, secret.refreshToken)
-        const user = await getUserData(payload)
-
-        const {password, ...rest} = user.data[0]
-
-        if (rest) {
-            req.result = dataLogger({ httpCode: 200, data: rest })
-        } else {
-            throw errorCode.ER_NOT_FOUND
-        }
-
-        return next()
     } catch (error) {
         req.result = endpointErrorHandler(error)
-        return next()
+        return controller.sendResponse(req, res)
     }
 }
 
-function setCookies(res, tokens) {
-    Object.entries(tokens).forEach(([tokenName, tokenValue]) => {
-        res.cookie(tokenName, tokenValue, {
-            httpOnly: true,
-            secure: true,
-            sameSite: 'strict'
-        })
-    })
-}
-
+// check if cookie tokens exists
 function isTokenExist(req){
     const refreshToken = req?.cookies?.refreshToken
     const accessToken = req?.cookies?.accessToken
@@ -239,50 +70,77 @@ function isTokenExist(req){
         const jwtRegex = /^[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+$/
         return jwtRegex.test(token)
     }
-    if(!refreshToken || !accessToken){
+    if((!refreshToken || !accessToken) && (!isJwtToken(refreshToken) || !isJwtToken(accessToken))){
         throw errorCode.ER_JWT_NOT_FOUND
-    }else if(!isJwtToken(refreshToken) || !isJwtToken(accessToken)){
-        throw errorCode.ER_JWT_MALFORMED
     }else{
         return {refreshToken, accessToken}
     }
 }
-async function handleTokenRotation(payload, secret){
-    const tokens = await TokenManager.authenticatedUser(payload, secret)
-    if (tokens && tokens.refreshToken && tokens.accessToken) {
-        return tokens
-    } else {
-        throw errorCode.ER_JWT_INVALID
+
+async function authorizeUser(req, res, next, retryCount = 1){
+    try {
+        const {accessToken} = isTokenExist(req)
+        req.payload = await TokenManager.verifyToken(accessToken, tokenSecret.accessToken)
+        return next()
+        
+    } catch (error) {
+        if(retryCount === 1) return rotateToken(req, res, next)
+        req.result = endpointErrorHandler(error)
+        return controller.sendResponse(req, res)
     }
 }
-async function validateToken(token, secret){
-    // validate token and get payload
-    const payload = await TokenManager.verifyToken(token, secret)
-    if(payload) return payload
+
+async function rotateToken(req, res, next){
+    try {
+        const {refreshToken} = isTokenExist(req)
+        req.tokens = await TokenManager.tokenRotation(refreshToken)
+        return authorizeUser(req, res, next, 0)
+
+    } catch (error) {
+        req.result = endpointErrorHandler(error)
+        return controller.sendResponse(req, res)
+    }
 }
 
-async function getUserData(payload) {
-    const model = new UserModel()
-    const user = await model.findByPk(payload.id)
-    if (user) return user
-    throw errorCode.ER_JWT_PAYLOAD_INVALID
+// genererate token using payload data
+async function generateToken(req, res, next){
+    try {
+        // check if paylad is present
+        if(!req.payload.id) throw errorCode.ER_JWT_EMPTY_PAYLOAD
+
+        // generate Access Token and Refresh Token
+        const tokens = await TokenManager.generateTokens(req.payload)
+
+        // send tokens to next middleware
+        req.tokens = tokens
+        return next()
+
+    } catch (error) {
+        req.result = endpointErrorHandler(error)
+        return controller.sendResponse(req, res)
+    }
 }
 
-const controller = (method) => (req, res, next) => {
-    return baseController[method](req, res, next, model = new UserModel())
+// add tokens to res object
+function setTokenCookie(req, res, next) {
+    try {
+        if(!req.tokens) throw errorCode.ER_JWT_FAILED_CREATE_TOKEN
+
+        Object.entries(req.tokens).forEach(([tokenName, tokenValue]) => {
+            res.cookie(tokenName, tokenValue, {
+                httpOnly: true,
+                secure: true,
+                sameSite: 'strict'
+            })
+        })
+        return next()
+
+    } catch (error) {
+        req.result = endpointErrorHandler(error)
+        return controller.sendResponse(req, res)
+    }
 }
 
 module.exports = {
-    rotateToken, 
-    authorizeUser, 
-    authenticateUser, 
-    login, 
-    register, 
-    logout,
-    profile,
-    create: controller('create'),
-    read: controller('read'),
-    update: controller('update'),
-    destroy: controller('destroy')
+    findByUsername, authenticateUser, generateToken, authorizeUser, setTokenCookie
 }
-

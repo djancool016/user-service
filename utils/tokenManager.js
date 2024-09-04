@@ -7,6 +7,11 @@ const jwt = require('jsonwebtoken')
 const signAsync = util.promisify(jwt.sign)
 const verifyAsync = util.promisify(jwt.verify)
 
+const tokenSecret = {
+    accessToken: process.env.ACCESS_TOKEN_SECRET,
+    refreshToken: process.env.REFRESH_TOKEN_SECRET
+}
+
 /**
  * Generate and verify token for user authorization
  */
@@ -17,7 +22,7 @@ class TokenManager {
      * @param {Number} expiresIn token expiration in second (default = 3600)
      * @returns string token
      */
-    static async generateToken(payload, secret, expiresIn = 3600) {
+    static async generateToken(payload, secret = tokenSecret, expiresIn = 3600) {
         try {
             if(!payload || Object.keys(payload).length == 0) throw errorCode.ER_JWT_EMPTY_PAYLOAD
             if(!secret) throw errorCode.ER_JWT_EMPTY_SIGNATURE
@@ -42,6 +47,7 @@ class TokenManager {
             }
 
             const payload = await verifyAsync(token, secret)
+            
             if(payload) {
                 if(!payload.iat || !payload.exp) throw errorCode.ER_JWT_EXPIRED
                 if(payload.iat > payload.exp) throw errorCode.ER_JWT_EXPIRED
@@ -51,6 +57,8 @@ class TokenManager {
                 if(expiredTime <= 0) throw errorCode.ER_JWT_EXPIRED
 
                 return payload
+            }else{
+                throw errorCode.ER_JWT_EMPTY_PAYLOAD
             }
 
         } catch (error) {
@@ -69,25 +77,25 @@ class TokenManager {
      * @param {Number} accessTokenExpiration access token expiration in second (default = 3600)
      * @returns refreshToken & accessToken
      */
-    static async authenticatedUser(
+    static async generateTokens(
         payload, 
-        secret = process.env.REFRESH_TOKEN_SECRET,
+        secret = tokenSecret,
         refreshTokenExpiration = 86400, 
-        accessTokenExpiration = 3600
+        accessTokenExpiration = 900
     ) {
         try {
             const refreshToken = await TokenManager.generateToken(
-                payload, secret, refreshTokenExpiration
+                payload, secret.refreshToken, refreshTokenExpiration
             )
                 
             const accessToken = await TokenManager.generateToken(
-                payload, secret, accessTokenExpiration
+                payload, secret.accessToken, accessTokenExpiration
             )
             if(!refreshToken || !accessToken) throw errorCode.ER_JWT_FAILED_CREATE_TOKEN
             return {refreshToken, accessToken}
 
         } catch (error) {
-            errorHandler(error)
+            throw errorHandler(error)
         }
     }
     
@@ -97,12 +105,12 @@ class TokenManager {
      * @param {Number} accessTokenExpiration access token expiration in second (default = 3600)
      * @returns new accessToken & refreshToken
      */
-    static async tokenRotation(refreshToken, refreshTokenExpiration = 86400, accessTokenExpiration = 3600) {
+    static async tokenRotation(refreshToken, secret = tokenSecret, refreshTokenExpiration = 86400, accessTokenExpiration = 900) {
         try {
-            const payload = TokenManager.verifyToken(refreshToken, process.env.REFRESH_TOKEN_SECRET)
+            const payload = TokenManager.verifyToken(refreshToken, secret.refreshToken)
 
-            return await TokenManager.authenticatedUser(
-                payload, refreshTokenExpiration, accessTokenExpiration
+            return await TokenManager.generateTokens(
+                payload, secret, refreshTokenExpiration, accessTokenExpiration
             )
 
         } catch (error) {
