@@ -8,9 +8,9 @@ const config = require('./config')
 const {databaseManager} = require('dwij-simple-orm').init(config)
 
 databaseManager.connect().then(async () => {
-    await require('./utils/truncator')
-    await require('./migrations')
-    await require('./seeders')
+    if(config.truncating) await require('./utils/truncator')
+    if(config.migrating) await require('./migrations')
+    if(config.seeding) await require('./seeders')
 })
 
 app.use(cookieParser())
