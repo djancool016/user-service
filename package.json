@@ -14,7 +14,7 @@
   "author": "Dwi Julianto",
   "license": "ISC",
   "dependencies": {
-    "dwij-simple-orm": "^1.1.0",
+    "dwij-simple-orm": "^1.2.8",
     "axios": "^1.7.2",
     "bcrypt": "^5.1.1",
     "cookie-parser": "^1.4.6",
