@@ -41,5 +41,5 @@ const config = {
     migrating: process.env.MIGRATING === '1',
     seeding: process.env.SEEDING === '1'
 }
-
+console.log(config)
 module.exports = config
