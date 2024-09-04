@@ -26,21 +26,39 @@ const testCases = {
             output: {tokens:{refreshToken: 'random string', accessToken: 'random string'}},
             description: 'Test generateToken should retuning tokens object'
         }
+    ],
+    authorizeUser: [
+        {
+            input: () => tempInput,
+            output: {payload:{id: 1, roleid: 1, username: 'admin', iat: 'random number', exp: 'random number'}},
+            description: 'Test authorizeUser should retuning rotated tokens object'
+        }
+    ],
+    rotateToken: [
+        {
+            input: () => tempInput,
+            output: {tokens:{refreshToken: 'random string', accessToken: 'random string'}},
+            description: 'Test authorizeUser should retuning rotated tokens object'
+        }
     ]
 }
 
 const testModule = () => {
-    const res = {}
+    const res = {cookie: () => {}}
     const next = (req) => () => {
+        if(req.tokens) req.cookies = req.tokens
+        console.log(req.tokens)
         tempInput = req
         return tempInput
     }
     const test = (method, req) => controller[method](req, res, next(req))
 
     return {
-        findByUsername: (req) =>test('findByUsername', req), 
-        authenticateUser: (req) =>test('authenticateUser', req), 
-        generateToken: (req) =>test('generateToken', req), 
+        findByUsername: (req) => test('findByUsername', req), 
+        authenticateUser: (req) => test('authenticateUser', req), 
+        generateToken: (req) => test('generateToken', req), 
+        authorizeUser: (req) => test('authorizeUser', req),
+        rotateToken: (req) => test('rotateToken', req)
     }
 }
 

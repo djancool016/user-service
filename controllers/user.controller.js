@@ -94,7 +94,8 @@ async function rotateToken(req, res, next){
     try {
         const {refreshToken} = isTokenExist(req)
         req.tokens = await TokenManager.tokenRotation(refreshToken)
-        return authorizeUser(req, res, next, 0)
+        await setTokenCookie(req, res, next)
+        return await authorizeUser(req, res, next, 0)
 
     } catch (error) {
         req.result = endpointErrorHandler(error)
@@ -113,6 +114,7 @@ async function generateToken(req, res, next){
 
         // send tokens to next middleware
         req.tokens = tokens
+        await setTokenCookie(req, res, next)
         return next()
 
     } catch (error) {
@@ -142,5 +144,5 @@ function setTokenCookie(req, res, next) {
 }
 
 module.exports = {
-    findByUsername, authenticateUser, generateToken, authorizeUser, setTokenCookie
+    findByUsername, authenticateUser, generateToken, authorizeUser, setTokenCookie, rotateToken
 }

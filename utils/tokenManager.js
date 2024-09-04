@@ -22,7 +22,7 @@ class TokenManager {
      * @param {Number} expiresIn token expiration in second (default = 3600)
      * @returns string token
      */
-    static async generateToken(payload, secret = tokenSecret, expiresIn = 3600) {
+    static async generateToken(payload, secret, expiresIn = 3600) {
         try {
             if(!payload || Object.keys(payload).length == 0) throw errorCode.ER_JWT_EMPTY_PAYLOAD
             if(!secret) throw errorCode.ER_JWT_EMPTY_SIGNATURE
@@ -107,7 +107,7 @@ class TokenManager {
      */
     static async tokenRotation(refreshToken, secret = tokenSecret, refreshTokenExpiration = 86400, accessTokenExpiration = 900) {
         try {
-            const payload = TokenManager.verifyToken(refreshToken, secret.refreshToken)
+            const {iat, exp, ...payload} = await TokenManager.verifyToken(refreshToken, secret.refreshToken)
 
             return await TokenManager.generateTokens(
                 payload, secret, refreshTokenExpiration, accessTokenExpiration
