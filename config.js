@@ -1,11 +1,10 @@
-const fs = require('fs')
-const path = require('path')
-const dotenv = require('dotenv')
 const { parse } = require('pg-connection-string')
-
 const env = process.env.NODE_ENV || 'development'
 
 if (env === 'development' || 'test') {
+    const fs = require('fs')
+    const path = require('path')
+    const dotenv = require('dotenv')
     // Load .env file for local development
     const envFile = path.resolve(__dirname, `.env.${env}`)
   
@@ -15,10 +14,10 @@ if (env === 'development' || 'test') {
       console.error(`Environment file ${envFile} not found`)
       process.exit(1)
     }
-  } else {
-    // In production, environment variables should be set in server environtment
-    console.log('Production environment, using Render-provided environment variables.');
-  }
+} else {
+// In production, environment variables should be set in server environtment
+console.log('Production environment, using Render-provided environment variables.');
+}
 
 let db_config = {
     host: process.env.DB_HOST,
@@ -37,7 +36,6 @@ const config = {
         queue_limit: process.env.POOL_QUEUE_LIMIT,
     },
     db_system: process.env.DB_SYSTEM,
-    logging: process.env.CONSOLE_LOG === '1',
     truncating: process.env.TRUNCATING === '1',
     migrating: process.env.MIGRATING === '1',
     seeding: process.env.SEEDING === '1'
